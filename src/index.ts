@@ -1,6 +1,7 @@
 import { build_agent } from "./agent/agent";
 import { pool } from "./browser/pool";
 import { config } from "./lib/config";
+import { print_usage } from "./lib/usage";
 
 const keyword = process.argv.slice(2).join(" ").trim() || "grill";
 
@@ -56,7 +57,7 @@ function render(update: Record<string, any>) {
 
 async function main() {
     console.log(`\nkeyword: ${keyword}`);
-    console.log(`model:   ${config.model} (subagents: ${config.fast_model})`);
+    console.log(`model:   ${config.model} (subagents: ${config.model})`);
     console.log(`browser: ${config.concurrency} parallel contexts\n`);
 
     const started = Date.now();
@@ -96,7 +97,7 @@ async function main() {
     console.log(`\n${"-".repeat(60)}`);
     if (last.trim()) console.log(last.trim());
     console.log(`${"-".repeat(60)}`);
-    console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
+    console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
 main()
@@ -104,4 +105,9 @@ main()
         console.error(`\nrun failed: ${(e as Error).message}`);
         process.exitCode = 1;
     })
-    .finally(() => pool.close());
+    .finally(() => {
+        // in the finally so a crashed run still reports what it spent
+        print_usage();
+        console.log();
+        return pool.close();
+    });

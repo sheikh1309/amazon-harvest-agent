@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { createDeepAgent, FilesystemBackend } from "deepagents";
-import { ChatAnthropic } from "@langchain/anthropic";
 import { config } from "../lib/config";
+import { make_model } from "../lib/model";
 import { workspace_root } from "../lib/workspace";
 import { system_prompt } from "./prompts";
 import { subagents } from "./subagents";
@@ -15,7 +15,7 @@ export async function build_agent() {
     await mkdir(workspace_root, { recursive: true });
 
     return createDeepAgent({
-        model: new ChatAnthropic({ model: config.model, maxTokens: 16_000 }),
+        model: make_model(config.model),
         systemPrompt: system_prompt,
 
         // The orchestrator keeps the same tools its subagents have, so it can finish a

@@ -1,5 +1,6 @@
 import type { SubAgent } from "deepagents";
 import { config } from "../lib/config";
+import { make_model } from "../lib/model";
 import { search_amazon } from "../tools/search_amazon";
 import { fetch_products } from "../tools/fetch_products";
 import { fetch_variant_details } from "../tools/fetch_variant_details";
@@ -23,7 +24,7 @@ const discovery: SubAgent = {
     description:
         "Search amazon for a keyword and return candidate ASINs that already pass the quality bar. " +
         "Use this first, and once per keyword.",
-    model: config.fast_model,
+    model: make_model(config.model),
     tools: [search_amazon],
     systemPrompt: [
         "You find candidate products on amazon.",
@@ -44,7 +45,7 @@ const extractor: SubAgent = {
     description:
         "Scrape full detail pages for a batch of ASINs, including all images and the full variant matrix. " +
         "Spawn several of these at once, each with a different slice of the ASIN list.",
-    model: config.fast_model,
+    model: make_model(config.model),
     tools: [fetch_products],
     systemPrompt: [
         "You scrape amazon detail pages for the ASINs you are given.",
@@ -65,7 +66,7 @@ const variant_hunter: SubAgent = {
     description:
         "Fill in per-variant prices, titles and images by visiting each child variant page. " +
         "Only worth running for products whose variants came back without prices.",
-    model: config.fast_model,
+    model: make_model(config.model),
     tools: [fetch_variant_details],
     systemPrompt: [
         "You enrich the variant data of products that have already been scraped.",
@@ -83,7 +84,7 @@ const curator: SubAgent = {
     description:
         "Rank the scraped products, drop near-duplicates, and write the final JSON + markdown report. " +
         "Run this last, once everything has been scraped.",
-    model: config.model,
+    model: make_model(config.model),
     tools: [rank_products, write_products],
     systemPrompt: [
         "You choose the final shortlist and write the output files.",
@@ -106,7 +107,7 @@ const qa: SubAgent = {
     description:
         "Check the finished output for missing fields and re-scrape anything that came back empty. " +
         "Run after the curator.",
-    model: config.fast_model,
+    model: make_model(config.model),
     tools: [fetch_products, write_products],
     systemPrompt: [
         "You verify the finished output.",

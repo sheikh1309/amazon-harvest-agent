@@ -11,9 +11,7 @@ export const config = {
     // Deliberately not MODEL_NAME — that key already exists in .env pointing at a
     // non-anthropic model, and silently inheriting it produces a 404 at run time.
     /** main agent + curator: reasoning-heavy, keep it on the strongest model */
-    model: process.env.AGENT_MODEL ?? "claude-opus-5",
-    /** extractor / qa subagents: they mostly shuttle tool calls, so a cheap model is fine */
-    fast_model: process.env.AGENT_FAST_MODEL ?? "claude-haiku-4-5",
+    model: process.env.AGENT_MODEL ?? "inclusionai/ling-2.6-flash:floor",
 
     /** how many browser contexts scrape in parallel. >6 from one IP gets you captcha'd */
     concurrency: num(process.env.CONCURRENCY, 6),
