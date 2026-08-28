@@ -1,69 +1,47 @@
-/**
- * Runs inside the page. Must stay self-contained — see the note in search.ts.
- *
- * Amazon splits variant data across two sources and neither one is complete:
- *
- *   1. An inline `P.register` script holding the full dimension matrix
- *      (`dimensions`, `variationValues`, `dimensionValuesDisplayData`,
- *      `dimensionToAsinMap`). This is the only place every axis appears — a
- *      product with colour *and* configuration often renders just one swatch row.
- *   2. The rendered twister, which is the only place the swatch **images**,
- *      the human-readable swatch **text**, and per-swatch prices exist.
- *
- * So we parse the JSON for the matrix and join the DOM onto it by label.
- */
-export function extract_variants() {
-    // ---- source 1: the inline twister payload ------------------------------
-
+export function extractVariants() {
     const script =
         Array.from(document.querySelectorAll("script"))
-            .map((s) => s.textContent || "")
-            .find((t) => t.includes("dimensionValuesDisplayData")) || "";
+            .map((element) => element.textContent || "")
+            .find((source) => source.includes("dimensionValuesDisplayData")) || "";
 
-    /**
-     * Pull one balanced `{...}` / `[...]` literal out of the blob.
-     *
-     * A regex can't do this: the values contain nested objects and quoted braces,
-     * so `"key"\s*:\s*(\{[^}]*\})` truncates at the first inner `}`.
-     */
-    const literal = (key: string): any => {
-        const at = script.indexOf('"' + key + '"');
-        if (at < 0) return null;
+    const balancedLiteral = (key: string): any => {
+        const keyAt = script.indexOf('"' + key + '"');
+        if (keyAt < 0) return null;
 
-        const obj = script.indexOf("{", at);
-        const arr = script.indexOf("[", at);
+        const objectAt = script.indexOf("{", keyAt);
+        const arrayAt = script.indexOf("[", keyAt);
         const start =
-            obj >= 0 && (arr < 0 || obj < arr) ? obj : arr >= 0 ? arr : -1;
+            objectAt >= 0 && (arrayAt < 0 || objectAt < arrayAt) ? objectAt : arrayAt >= 0 ? arrayAt : -1;
         if (start < 0) return null;
 
         const open = script[start];
         const close = open === "{" ? "}" : "]";
         let depth = 0;
-        let in_string = false;
+        let inString = false;
         let escaped = false;
 
-        for (let i = start; i < script.length; i++) {
-            const ch = script[i];
+        for (let index = start; index < script.length; index++) {
+            const character = script[index];
             if (escaped) {
                 escaped = false;
                 continue;
             }
-            if (ch === "\\") {
+            if (character === "\\") {
                 escaped = true;
                 continue;
             }
-            if (ch === '"') {
-                in_string = !in_string;
+            if (character === '"') {
+                inString = !inString;
                 continue;
             }
-            if (in_string) continue;
+            if (inString) continue;
 
-            if (ch === open) depth++;
-            else if (ch === close) {
+            if (character === open) depth++;
+            else if (character === close) {
                 depth--;
                 if (depth === 0) {
                     try {
-                        return JSON.parse(script.slice(start, i + 1));
+                        return JSON.parse(script.slice(start, index + 1));
                     } catch {
                         return null;
                     }
@@ -73,16 +51,14 @@ export function extract_variants() {
         return null;
     };
 
-    const dimensions: string[] = literal("dimensions") || [];
-    const labels: Record<string, string> = literal("variationDisplayLabels") || {};
-    const values: Record<string, string[]> = literal("variationValues") || {};
-    const display: Record<string, string[]> = literal("dimensionValuesDisplayData") || {};
-    const selected_idx: Record<string, number> = literal("selectedVariationValues") || {};
-    const parent = /"parentAsin"\s*:\s*"([A-Z0-9]{10})"/.exec(script)?.[1] || null;
+    const dimensionKeys: string[] = balancedLiteral("dimensions") || [];
+    const dimensionLabels: Record<string, string> = balancedLiteral("variationDisplayLabels") || {};
+    const dimensionValues: Record<string, string[]> = balancedLiteral("variationValues") || {};
+    const asinCoordinates: Record<string, string[]> = balancedLiteral("dimensionValuesDisplayData") || {};
+    const selectedIndexes: Record<string, number> = balancedLiteral("selectedVariationValues") || {};
+    const parentAsin = /"parentAsin"\s*:\s*"([A-Z0-9]{10})"/.exec(script)?.[1] || null;
 
-    // ---- source 2: the rendered swatches -----------------------------------
-
-    const norm = (s: string | null | undefined) => (s || "").replace(/\s+/g, " ").trim();
+    const normalise = (value: string | null | undefined) => (value || "").replace(/\s+/g, " ").trim();
 
     type Swatch = {
         asin: string | null;
@@ -93,8 +69,7 @@ export function extract_variants() {
         selected: boolean;
     };
 
-    /** dimension key -> normalized label -> swatch */
-    const swatches: Record<string, Record<string, Swatch>> = {};
+    const swatchesByDimension: Record<string, Record<string, Swatch>> = {};
 
     const rows = Array.from(
         document.querySelectorAll(
@@ -103,96 +78,90 @@ export function extract_variants() {
     );
 
     for (const row of rows) {
-        const key = (row.id || "")
-            .replace("inline-twister-row-", "")
-            .replace("variation_", "");
+        const key = (row.id || "").replace("inline-twister-row-", "").replace("variation_", "");
         if (!key) continue;
 
         const items = Array.from(row.querySelectorAll("li[data-asin], li[data-defaultasin]"));
         if (!items.length) continue;
 
-        const bucket = (swatches[key] = swatches[key] || {});
+        const bucket = (swatchesByDimension[key] = swatchesByDimension[key] || {});
 
-        for (const li of items) {
-            const img = li.querySelector("img");
-            const label = norm(
-                li.querySelector(".swatch-title-text-display")?.textContent ||
-                    img?.getAttribute("alt") ||
-                    li.querySelector(".twisterTextDiv")?.textContent ||
-                    li.textContent?.split("\n")[0],
+        for (const item of items) {
+            const image = item.querySelector("img");
+            const label = normalise(
+                item.querySelector(".swatch-title-text-display")?.textContent ||
+                    image?.getAttribute("alt") ||
+                    item.querySelector(".twisterTextDiv")?.textContent ||
+                    item.textContent?.split("\n")[0],
             );
             if (!label) continue;
 
-            const price_text =
-                li.querySelector(".dimension-slot-info .a-offscreen")?.textContent ||
-                li.querySelector(".dimension-slot-info")?.textContent ||
+            const priceText =
+                item.querySelector(".dimension-slot-info .a-offscreen")?.textContent ||
+                item.querySelector(".dimension-slot-info")?.textContent ||
                 "";
-            const price_match = price_text.replace(/,/g, "").match(/\d+(\.\d+)?/);
+            const priceMatch = priceText.replace(/,/g, "").match(/\d+(\.\d+)?/);
 
             bucket[label] = {
-                asin: li.getAttribute("data-asin") || li.getAttribute("data-defaultasin"),
+                asin: item.getAttribute("data-asin") || item.getAttribute("data-defaultasin"),
                 label,
-                image: img?.getAttribute("src") || null,
-                price: price_match ? parseFloat(price_match[0]) : null,
-                available: li.getAttribute("data-initiallyunavailable") !== "true",
+                image: image?.getAttribute("src") || null,
+                price: priceMatch ? Number.parseFloat(priceMatch[0]) : null,
+                available: item.getAttribute("data-initiallyunavailable") !== "true",
                 selected:
-                    li.getAttribute("data-initiallyselected") === "true" ||
-                    !!li.querySelector(".a-button-selected") ||
-                    li.classList.contains("swatchSelect"),
+                    item.getAttribute("data-initiallyselected") === "true" ||
+                    !!item.querySelector(".a-button-selected") ||
+                    item.classList.contains("swatchSelect"),
             };
         }
     }
 
-    // ---- merge -------------------------------------------------------------
+    const keys = dimensionKeys.length ? dimensionKeys : Object.keys(swatchesByDimension);
 
-    // the JSON knows every axis; fall back to whatever the DOM rendered
-    const keys = dimensions.length ? dimensions : Object.keys(swatches);
+    const dimensions = keys.map((key) => {
+        const bucket = swatchesByDimension[key] || {};
+        const declaredValues = dimensionValues[key] || [];
+        const labels = declaredValues.length ? declaredValues : Object.keys(bucket);
 
-    const merged = keys.map((key) => {
-        const bucket = swatches[key] || {};
-        const from_json = values[key] || [];
-        const value_labels = from_json.length ? from_json : Object.keys(bucket);
-
-        const dom_label =
+        const domLabel =
             document
                 .querySelector(`#inline-twister-dim-title-${key} .a-color-secondary`)
                 ?.textContent?.replace(/:\s*$/, "") ||
             document.querySelector(`#${"variation_" + key} .a-form-label`)?.textContent;
 
-        const selected_label =
+        const selectedLabel =
             document
                 .querySelector(`#inline-twister-expanded-dimension-text-${key}`)
                 ?.textContent?.trim() ||
-            (typeof selected_idx[key] === "number" ? from_json[selected_idx[key]] : null) ||
+            (typeof selectedIndexes[key] === "number" ? declaredValues[selectedIndexes[key]] : null) ||
             null;
 
         return {
             key,
-            label: labels[key] || norm(dom_label) || null,
-            selected: selected_label,
-            values: value_labels.map((label) => {
-                const swatch = bucket[norm(label)];
+            label: dimensionLabels[key] || normalise(domLabel) || null,
+            selected: selectedLabel,
+            values: labels.map((label) => {
+                const swatch = bucket[normalise(label)];
                 return {
                     asin: swatch?.asin || null,
                     label,
                     thumb: swatch?.image || null,
                     price: swatch?.price ?? null,
                     available: swatch ? swatch.available : true,
-                    selected: swatch ? swatch.selected : label === selected_label,
+                    selected: swatch ? swatch.selected : label === selectedLabel,
                 };
             }),
         };
     });
 
-    // every child asin, with its coordinate on each axis
-    const combinations = Object.keys(display).map((asin) => {
-        const coords = display[asin] || [];
-        const values_by_key: Record<string, string> = {};
-        keys.forEach((key, i) => {
-            if (coords[i] != null) values_by_key[key] = coords[i];
+    const combinations = Object.keys(asinCoordinates).map((asin) => {
+        const coordinates = asinCoordinates[asin] || [];
+        const values: Record<string, string> = {};
+        keys.forEach((key, index) => {
+            if (coordinates[index] != null) values[key] = coordinates[index];
         });
-        return { asin, values: values_by_key };
+        return { asin, values };
     });
 
-    return { parent_asin: parent, dimensions: merged, combinations };
+    return { parentAsin, dimensions, combinations };
 }

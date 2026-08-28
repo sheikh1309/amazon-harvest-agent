@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    // The codebase already passed strict before this was turned on; it is here to
+    // keep it that way. Without strictNullChecks every `| null` in the schemas is
+    // decorative and `p.title.trim()` compiles fine.
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "allowSyntheticDefaultImports": true,

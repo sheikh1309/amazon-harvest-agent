@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+# A second push to the same branch makes the first run's result irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Nothing in the suite reaches amazon, postgres or openrouter, so CI needs no
+      # secrets and no browser download. The selectors are checked against live pages
+      # by `pnpm check`, which is deliberately not part of CI — amazon's DOM changing
+      # is not a reason to fail someone's pull request.
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The image build runs typecheck and tests itself; there is no point paying for it
+    # until they have already passed on their own.
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

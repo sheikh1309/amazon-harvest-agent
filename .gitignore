@@ -6,3 +6,5 @@ workspace/
 output/
 .env
 *.log
+.env.local
+coverage/
