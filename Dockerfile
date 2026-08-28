@@ -14,7 +14,9 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
+# The pnpm version comes from the "packageManager" field in package.json, so it is
+# pinned in exactly one place; corepack fetches that exact version on first use.
+RUN corepack enable
 
 # Dependencies as their own layer: the lockfile changes far less often than src/, so a
 # code-only change reuses the installed store instead of resolving 200 packages again.

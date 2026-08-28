@@ -21,13 +21,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.5.2",
-      "onFail": "download"
-    }
-  },
+  "packageManager": "pnpm@11.20.0",
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
     "@types/node": "^25.9.2",
